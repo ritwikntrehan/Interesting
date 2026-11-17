@@ -15,25 +15,24 @@ npm run test:live:analytics
 
 The live test should show records from at least three sources. An Overpass public-instance outage is acceptable only when its status is explicitly `unavailable`; it must not remove other results.
 
-## 2. Authenticate Wrangler and create D1
+## 2. Authenticate Wrangler and verify D1
 
 ```bash
 npx wrangler login
 npx wrangler whoami
-npx wrangler d1 create world-data-federation-cache
+npx wrangler d1 info world-data-federation-cache
 ```
 
-Copy the UUID printed by the last command. In `wrangler.jsonc`, replace exactly:
-
-```json
-"database_id": "REPLACE_WITH_D1_DATABASE_ID"
-```
-
-with that UUID. Do not change the binding name `CACHE` or database name `world-data-federation-cache`. Commit and push this one-time configuration change.
-
-Apply the production schema:
+The repository already contains the owner-created `world-data-federation-cache` database ID and `CACHE` binding. If `d1 info` succeeds in the intended account, do not create another database or edit the binding. Apply both committed migrations, including the v0.2 place-search cache:
 
 ```bash
+npm run db:migrate:remote
+```
+
+If deploying a fork into a different Cloudflare account, create a new database and replace only `database_id` in `wrangler.jsonc` with the returned UUID before running the migration:
+
+```bash
+npx wrangler d1 create world-data-federation-cache
 npm run db:migrate:remote
 ```
 
