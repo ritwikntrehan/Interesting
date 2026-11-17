@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","metadata":{"status":200},"features":[{"type":"Feature","id":"ci123","geometry":{"type":"Point","coordinates":[-118.2,34.1,8.4]},"properties":{"mag":2.8,"place":"Los Angeles region","time":1700000000000,"updated":1700001000000,"url":"https://earthquake.usgs.gov/earthquakes/eventpage/ci123","status":"reviewed","title":"M 2.8 - Los Angeles region"}}]}

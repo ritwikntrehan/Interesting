@@ -1,0 +1,2 @@
+# Optional server-side narrative synthesis only. The deterministic federation works without it.
+ANTHROPIC_API_KEY=

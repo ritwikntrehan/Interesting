@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","properties":{"exceededTransferLimit":false},"features":[{"type":"Feature","id":8191,"geometry":{"type":"Point","coordinates":[-118.01756,34.20002]},"properties":{"objectid_1":8191,"dep_id":"10008312","site_name":"Winter Creek","dev_stat":"Occurrence","code_list":" MO AU AG CU","grade":"D"}}]}
