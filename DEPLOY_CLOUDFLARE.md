@@ -11,6 +11,7 @@ npm test
 npm run build
 npm run test:live
 npm run test:live:analytics
+npm run test:live:discovery
 ```
 
 The live test should show records from at least three sources. An Overpass public-instance outage is acceptable only when its status is explicitly `unavailable`; it must not remove other results.
@@ -23,7 +24,7 @@ npx wrangler whoami
 npx wrangler d1 info world-data-federation-cache
 ```
 
-The repository already contains the owner-created `world-data-federation-cache` database ID and `CACHE` binding. If `d1 info` succeeds in the intended account, do not create another database or edit the binding. Apply both committed migrations, including the v0.2 place-search cache:
+The repository already contains the owner-created `world-data-federation-cache` database ID and `CACHE` binding. If `d1 info` succeeds in the intended account, do not create another database or edit the binding. Apply all committed migrations, including the interpretation cache and quota ledger:
 
 ```bash
 npm run db:migrate:remote
@@ -47,7 +48,7 @@ npm run deploy
 
 Wrangler builds the Worker entry at `apps/worker/src/index.ts`, uploads `dist/web` through Workers Static Assets, and prints the `https://world-data-federation.<account-subdomain>.workers.dev` URL.
 
-No secret is required. The supported variables already in `wrangler.jsonc` are:
+No secret is required for deterministic discovery. The supported variables already in `wrangler.jsonc` are:
 
 | Name | Default | Purpose |
 |---|---:|---|
@@ -55,8 +56,15 @@ No secret is required. The supported variables already in `wrangler.jsonc` are:
 | `STALE_TTL_SECONDS` | `86400` | maximum explicit stale fallback lifetime |
 | `OVERPASS_ENDPOINT` | official `overpass-api.de` interpreter | operator-selectable Overpass instance |
 | `GEOCODER_ENDPOINT` | official public Nominatim search endpoint | operator-selectable geocoder; public endpoint is rate-limited and cached |
+| `ANTHROPIC_MODEL` | `claude-haiku-5-5` | optional finding-interpretation model |
 
-If adding optional narrative synthesis in a future release, set its key only as a Worker secret (`npx wrangler secret put ANTHROPIC_API_KEY`). This version does not call Anthropic and does not need the secret.
+To enable the optional, explicitly user-triggered interpretation button, store the key only as a Worker secret:
+
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY
+```
+
+Without it, deterministic discovery remains fully available. Interpretations are cached for 30 days, capped at 350 output tokens, limited to 10 attempts/hour/IP, and guarded by a conservative D1-backed $0.50 lifetime allowance. Also set a $0.50 Anthropic workspace spend limit as defense in depth; the application ledger is not a billing guarantee under globally concurrent edge requests.
 
 ## 4. Verify the `workers.dev` deployment
 
@@ -69,6 +77,7 @@ curl -fsS "$BASE/api/v1/sources"
 curl -fsS "$BASE/api/v1/openapi.json"
 curl -fsS "$BASE/api/v1/context?lat=34.0522&lon=-118.2437&radius_km=100&limit=100"
 curl -fsS "$BASE/api/v1/analysis?lat=34.0522&lon=-118.2437&radius_km=100&limit=100"
+curl -fsS "$BASE/api/v1/discover?lat=21.3069&lon=-157.8583&radius_km=100&limit=100"
 curl -fsS "$BASE/api/v1/compare?lat_a=34.0522&lon_a=-118.2437&lat_b=34.742&lon_b=-120.5724&radius_km=100&limit=100"
 curl -fsS "$BASE/api/v1/places?q=Vandenberg%20Space%20Force%20Base"
 ```
@@ -81,7 +90,7 @@ Then open `$BASE` in a browser and verify:
 4. Vandenberg/Santa Barbara and Tokyo Bay presets produce shareable URLs;
 5. comparison uses equivalent parameters and includes source availability/cap states;
 6. a record opens source URL, timestamps, raw fields, attribution, and limitations;
-7. `/mcp` connects and `list_sources`, `build_location_context`, `analyze_region`, and `compare_regions` run successfully;
+7. `/mcp` connects and `list_sources`, `build_location_context`, `analyze_region`, `discover_region`, and `compare_regions` run successfully;
 8. a deliberately invalid radius (`251`) returns HTTP 400;
 9. a provider outage remains visible without erasing other provider results.
 

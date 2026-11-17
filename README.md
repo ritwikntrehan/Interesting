@@ -1,6 +1,6 @@
 # World Data Federation
 
-A functioning, source-traceable regional intelligence workbench for real public data. Search or choose a WGS84 region, query independent providers in parallel, compute reproducible patterns, compare equivalent regions, and inspect every metric against its supporting canonical records. Provider failures remain visible and do not discard successful results from other sources.
+A map-first geographic discovery engine for real public data. Click, search, or explore the map center to produce deterministic, evidence-linked findings across independent providers, compare equivalent regions, and inspect every claim against its canonical records. Provider failures remain visible and do not discard successful results from other sources.
 
 ## What works
 
@@ -11,6 +11,8 @@ A functioning, source-traceable regional intelligence workbench for real public 
 - **Canonical contract:** stable IDs, WGS84 geometry, normalized and unmodified upstream fields, provenance, license, timestamps, quality flags, transformation version, and limitations.
 - **Regional analytics:** returned-sample commodity and geology distributions, radial distance bins, deterministic great-circle proximity clusters, recent seismic summaries, nearest mapped infrastructure, evidence-linked computed observations, and explicit cap disclosures.
 - **Region comparison:** equivalent query parameters, percentage-point composition differences, shared/unique geology labels, spatial metrics, and side-by-side source availability.
+- **Discovery engine:** readable concentration, geology, infrastructure, and seismic findings with supporting record IDs, focus geometry, limitations, and follow-up explorations.
+- **Optional Claude interpretation:** explicit per-finding Haiku requests only, with bounded evidence, caching, quotas, and a conservative $0.50 server-side allowance. Deterministic discovery never depends on AI.
 - **Place search:** explicit-submit Nominatim lookup with 1 request/second public-endpoint guard, identifying User-Agent, 30-day D1 cache, attribution, and an operator-selectable endpoint. It is deliberately not autocomplete.
 - **One Worker:** Hono REST API, official MCP Streamable HTTP endpoint, D1 query/place cache, rate budget, per-isolate metrics, and built React/MapLibre assets.
 - **Partial results:** adapters run independently; `live`, `cached`, `stale`, `partial`, `unavailable`, and `unsupported` states are preserved.
@@ -38,6 +40,7 @@ npm test
 npm run build
 npm run test:live   # opt-in: calls all four public upstream services
 npm run test:live:analytics # LA, Vandenberg/Santa Barbara, Tokyo Bay + comparison
+npm run test:live:discovery # Honolulu, LA, Tokyo, Vandenberg + discovery comparison
 ```
 
 The regional live test uses Los Angeles, Vandenberg/Santa Barbara, and Tokyo Bay with equivalent 100 km queries, then compares Los Angeles with Vandenberg/Santa Barbara. It verifies evidence links and source-state handling. Public Overpass capacity is nondeterministic; an explicit `unavailable` state is accepted without hiding the other live results.
@@ -50,6 +53,7 @@ curl 'http://localhost:8787/api/v1/sources'
 curl 'http://localhost:8787/api/v1/metrics'
 curl 'http://localhost:8787/api/v1/context?lat=34.0522&lon=-118.2437&radius_km=100&sources=macrostrat,mrds,osm,earthquakes&min_magnitude=2.5&days=30&limit=250'
 curl 'http://localhost:8787/api/v1/analysis?lat=34.0522&lon=-118.2437&radius_km=100&limit=250'
+curl 'http://localhost:8787/api/v1/discover?lat=21.3069&lon=-157.8583&radius_km=100&limit=250'
 curl 'http://localhost:8787/api/v1/compare?lat_a=34.0522&lon_a=-118.2437&label_a=Los%20Angeles&lat_b=34.742&lon_b=-120.5724&label_b=Vandenberg&radius_km=100&limit=250'
 curl 'http://localhost:8787/api/v1/places?q=Vandenberg%20Space%20Force%20Base'
 curl 'http://localhost:8787/api/v1/openapi.json'
@@ -68,6 +72,7 @@ The standard remote MCP endpoint is `https://YOUR-WORKER.workers.dev/mcp`. It us
 - `find_recent_earthquakes`
 - `build_location_context`
 - `analyze_region`
+- `discover_region`
 - `compare_regions`
 
 Example MCP client configuration:
@@ -106,7 +111,9 @@ packages/contracts/     canonical TypeScript contract and validation
 packages/adapters/      independent real-source adapters and catalog
 packages/orchestrator/  parallel execution, cache, geospatial helpers
 packages/analytics/     deterministic findings, distributions, clusters, comparison
+packages/discovery/     evidence-linked geographic discovery and commodity labels
 packages/geocoding/     cached, policy-bounded place search
+packages/interpretation/ optional bounded Anthropic interpretation, cache, quotas
 tests/                  fixtures, adapter/contract/API/MCP tests, live smoke
 migrations/             D1 query and place-cache schema
 ```
@@ -115,6 +122,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design details and [DEPLOY_CLOUDFLARE
 
 ## Security and scope
 
-Inputs are allow-listed and bounded. Upstream destinations are hard-coded except for operator-controlled Overpass and geocoder endpoint variables. The application does not proxy arbitrary URLs, perform unbounded scraping, expose browser-side secrets, or perform place autocomplete. Optional LLM narrative generation is deliberately not enabled; the findings are deterministic computations over source records.
+Inputs are allow-listed and bounded. The application does not proxy arbitrary URLs, perform unbounded scraping, expose browser-side secrets, or perform place autocomplete. Claude interpretation is optional, user-triggered, server-only, and limited to explaining already-computed findings; it never performs retrieval, spatial calculation, or statistical analysis.
 
 Application code is MIT licensed. Upstream records remain under their respective licenses and attribution requirements.

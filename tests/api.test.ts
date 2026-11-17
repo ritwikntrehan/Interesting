@@ -27,6 +27,17 @@ describe("HTTP API", () => {
     expect(comparisonResponse.status).toBe(200);
     expect(comparison.labels).toEqual({ regionA: "Vandenberg", regionB: "Tokyo" });
     expect(comparison.comparison.dataAvailability).toHaveLength(4);
+    expect(comparison.discoveries).toBeInstanceOf(Array);
+  });
+  it("serves deterministic map-ready discoveries with evidence and follow-ups", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => { const value = String(url); if (value.includes("macrostrat")) return response(macro); if (value.includes("FeatureServer")) return response(mrds); if (value.includes("earthquake")) return response(quakes); if (value.includes("overpass")) return response(osm); throw new Error(value); }));
+    const result = await app.request("/api/v1/discover?lat=21.3099&lon=-157.8581&radius_km=100"); const body = await result.json() as any;
+    expect(result.status).toBe(200); expect(body.discovery.discoveryVersion).toBe("1.0.0");
+    expect(body.discovery.discoveries.every((item: any) => item.supportingRecordIds.length && item.followUps.length && item.relevantGeometry.type === "FeatureCollection")).toBe(true);
+  });
+  it("keeps deterministic discovery available when optional Claude is not configured", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => { const value = String(url); if (value.includes("macrostrat")) return response(macro); if (value.includes("FeatureServer")) return response(mrds); if (value.includes("earthquake")) return response(quakes); if (value.includes("overpass")) return response(osm); throw new Error(value); }));
+    const result = await app.request("/api/v1/interpret", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lat: 21.3099, lon: -157.8581, radius_km: 100, sources: "macrostrat,mrds,osm,earthquakes", discovery_id: "recent-seismic-context", label: "Honolulu" }) }); const body = await result.json() as any; expect(result.status).toBe(503); expect(body.error.code).toBe("AI_NOT_CONFIGURED");
   });
   it("exposes policy-compliant place search with attribution", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response([{ place_id: 7, osm_type: "relation", osm_id: 9, display_name: "Los Angeles, California, United States", name: "Los Angeles", lat: "34.0522", lon: "-118.2437", type: "city", category: "place" }])));

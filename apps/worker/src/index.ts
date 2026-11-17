@@ -1,19 +1,24 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { z } from "zod";
 import { createAdapters, SOURCE_CATALOG, SOURCE_CATALOG_VERSION } from "../../../packages/adapters/src/index.ts";
 import { QuerySchema } from "../../../packages/contracts/src/index.ts";
 import { D1QueryCache, FederationOrchestrator, MemoryQueryCache, type D1Like } from "../../../packages/orchestrator/src/index.ts";
 import { analyzeContext, compareRegions } from "../../../packages/analytics/src/index.ts";
+import { discoverComparison, discoverRegion } from "../../../packages/discovery/src/index.ts";
+import { InterpretationError, InterpretationService } from "../../../packages/interpretation/src/index.ts";
 import { PlaceSearchError, PlaceSearchService } from "../../../packages/geocoding/src/index.ts";
 import { OPENAPI } from "./openapi.ts";
 import { handleMcp } from "./mcp.ts";
 
-export interface Env { CACHE?: D1Like; ASSETS?: { fetch(request: Request): Promise<Response> }; CACHE_TTL_SECONDS?: string; STALE_TTL_SECONDS?: string; OVERPASS_ENDPOINT?: string; GEOCODER_ENDPOINT?: string; ANTHROPIC_API_KEY?: string }
+export interface Env { CACHE?: D1Like; ASSETS?: { fetch(request: Request): Promise<Response> }; CACHE_TTL_SECONDS?: string; STALE_TTL_SECONDS?: string; OVERPASS_ENDPOINT?: string; GEOCODER_ENDPOINT?: string; ANTHROPIC_API_KEY?: string; ANTHROPIC_MODEL?: string }
 type Variables = { orchestrator: FederationOrchestrator };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 const fallbackCache = new MemoryQueryCache();
 const rateBuckets = new Map<string, { start: number; count: number }>();
 const metrics = { requests: 0, contextQueries: 0, providerFailures: 0, startedAt: new Date().toISOString() };
+const interpretationBuckets = new Map<string, { start: number; count: number }>();
+const InterpretSchema = QuerySchema.extend({ discovery_id: z.string().min(1).max(120), label: z.string().min(1).max(160).default("Selected region") });
 
 app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "DELETE", "OPTIONS"], allowHeaders: ["Content-Type", "mcp-session-id", "Last-Event-ID", "mcp-protocol-version"], exposeHeaders: ["mcp-session-id", "mcp-protocol-version", "X-RateLimit-Limit", "X-RateLimit-Remaining"] }));
 app.use("*", async (c, next) => {
@@ -51,12 +56,25 @@ app.get("/api/v1/analysis", async (c) => {
   const context = await c.get("orchestrator").buildContext(parsed.data, { signal: c.req.raw.signal });
   return c.json({ context, analysis: analyzeContext(context) });
 });
+app.get("/api/v1/discover", async (c) => {
+  const parsed = QuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
+  if (!parsed.success) return c.json({ error: { code: "INVALID_QUERY", message: "Query parameters failed validation", issues: parsed.error.issues } }, 400);
+  const context = await c.get("orchestrator").buildContext(parsed.data, { signal: c.req.raw.signal });
+  return c.json({ context, discovery: discoverRegion(context) });
+});
+app.post("/api/v1/interpret", async (c) => {
+  const key = c.req.header("CF-Connecting-IP") || "local"; const now = Date.now(); const prior = interpretationBuckets.get(key); const bucket = !prior || now - prior.start >= 3600000 ? { start: now, count: 0 } : prior; bucket.count++; interpretationBuckets.set(key, bucket);
+  if (bucket.count > 10) return c.json({ error: { code: "AI_RATE_LIMITED", message: "Maximum 10 optional interpretations per hour per edge isolate." } }, 429);
+  const parsed = InterpretSchema.safeParse(await c.req.json().catch(() => ({}))); if (!parsed.success) return c.json({ error: { code: "INVALID_INTERPRETATION_REQUEST", message: "Valid query parameters and discovery_id are required", issues: parsed.error.issues } }, 400);
+  const context = await c.get("orchestrator").buildContext(parsed.data, { signal: c.req.raw.signal }); const discovery = discoverRegion(context); const selected = discovery.discoveries.find((item) => item.id === parsed.data.discovery_id); if (!selected) return c.json({ error: { code: "DISCOVERY_NOT_FOUND", message: "The requested deterministic discovery was not produced for this query." } }, 404);
+  try { return c.json(await new InterpretationService(c.env?.ANTHROPIC_API_KEY, c.env?.CACHE, c.env?.ANTHROPIC_MODEL).interpret(context, selected, parsed.data.label, c.req.raw.signal)); } catch (error) { if (error instanceof InterpretationError) return c.json({ error: { code: error.code, message: error.message } }, error.status as 429 | 502 | 503); throw error; }
+});
 app.get("/api/v1/compare", async (c) => {
   const params = new URL(c.req.url).searchParams; const shared = { radius_km: params.get("radius_km") ?? undefined, sources: params.get("sources") ?? undefined, min_magnitude: params.get("min_magnitude") ?? undefined, days: params.get("days") ?? undefined, limit: params.get("limit") ?? undefined };
   const a = QuerySchema.safeParse({ ...shared, lat: params.get("lat_a"), lon: params.get("lon_a") }); const b = QuerySchema.safeParse({ ...shared, lat: params.get("lat_b"), lon: params.get("lon_b") });
   if (!a.success || !b.success) return c.json({ error: { code: "INVALID_COMPARISON", message: "Both regions require valid lat_a, lon_a, lat_b, and lon_b parameters", issues: [...(!a.success ? a.error.issues : []), ...(!b.success ? b.error.issues : [])] } }, 400);
   const [contextA, contextB] = await Promise.all([c.get("orchestrator").buildContext(a.data, { signal: c.req.raw.signal }), c.get("orchestrator").buildContext(b.data, { signal: c.req.raw.signal })]);
-  const regionA = analyzeContext(contextA); const regionB = analyzeContext(contextB); return c.json({ labels: { regionA: params.get("label_a") || "Region A", regionB: params.get("label_b") || "Region B" }, contexts: { regionA: contextA, regionB: contextB }, comparison: compareRegions(regionA, regionB) });
+  const regionA = analyzeContext(contextA); const regionB = analyzeContext(contextB); const comparison = compareRegions(regionA, regionB); return c.json({ labels: { regionA: params.get("label_a") || "Region A", regionB: params.get("label_b") || "Region B" }, contexts: { regionA: contextA, regionB: contextB }, comparison, discoveries: discoverComparison(comparison) });
 });
 app.get("/api/v1/places", async (c) => {
   try { const service = new PlaceSearchService(c.env?.CACHE, c.env?.GEOCODER_ENDPOINT); return c.json(await service.search(c.req.query("q") || "", c.req.raw.signal), 200, { "Cache-Control": "public, max-age=86400" }); }
