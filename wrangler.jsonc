@@ -14,7 +14,7 @@
     {
       "binding": "CACHE",
       "database_name": "world-data-federation-cache",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "61b7ec85-892b-48e0-b2d9-67564ab7b14b",
       "migrations_dir": "migrations"
     }
   ],
