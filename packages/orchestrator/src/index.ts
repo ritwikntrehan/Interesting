@@ -1,13 +1,22 @@
 import { SOURCE_IDS, sanitizeQuery, type ContextEnvelope, type DataAdapter, type QueryDefinition, type SourceId } from "../../contracts/src/index.ts";
 import { GLOBAL_LIMITATIONS, SOURCE_CATALOG_VERSION } from "../../adapters/src/catalog.ts";
-import type { QueryCache } from "./cache.ts";
+import type { CacheRecord, QueryCache } from "./cache.ts";
 export * from "./cache.ts";
 
 export class FederationOrchestrator {
   constructor(private adapters: DataAdapter[], private cache?: QueryCache, private cacheTtlSeconds = 900, private staleTtlSeconds = 86400) {}
 
   async buildContext(rawInput: QueryDefinition, options: { bypassCache?: boolean; signal?: AbortSignal } = {}): Promise<ContextEnvelope> {
-    const input = sanitizeQuery(rawInput); const key = this.cacheKey(input); let cached = this.cache ? await this.cache.get(key) : null;
+    const input = sanitizeQuery(rawInput); const key = this.cacheKey(input);
+    let cached: CacheRecord | null = null;
+    if (this.cache) {
+      try {
+        cached = await this.cache.get(key);
+      } catch (error) {
+        // A missing cache migration or transient D1 failure must not block live source queries.
+        console.error(JSON.stringify({ event: "cache_read_error", message: error instanceof Error ? error.message : String(error) }));
+      }
+    }
     if (cached && !cached.stale && !options.bypassCache) return this.markCached(cached.value, cached.ageSeconds, false);
     const selected = this.adapters.filter((adapter) => input.sources.includes(adapter.id));
     const results = await Promise.all(selected.map((adapter) => adapter.query(input, { signal: options.signal })));
