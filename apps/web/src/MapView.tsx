@@ -4,11 +4,11 @@ import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import type { FeatureCollection } from "geojson";
 import type { ContextEnvelope } from "../../../packages/contracts/src/index.ts";
 
-interface Props { lat: number; lon: number; radiusKm: number; data: ContextEnvelope | null; onLocation(lat: number, lon: number): void; onSelect(id: string): void }
+interface Props { lat: number; lon: number; radiusKm: number; data: ContextEnvelope | null; selectedId?: string | null; onLocation(lat: number, lon: number): void; onSelect(id: string): void }
 
 setWorkerUrl(mapWorkerUrl);
 
-export function MapView({ lat, lon, radiusKm, data, onLocation, onSelect }: Props) {
+export function MapView({ lat, lon, radiusKm, data, selectedId, onLocation, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null); const mapRef = useRef<MapLibreMap | null>(null);
   const callbacks = useRef({ onLocation, onSelect }); callbacks.current = { onLocation, onSelect };
   useEffect(() => {
@@ -24,7 +24,7 @@ export function MapView({ lat, lon, radiusKm, data, onLocation, onSelect }: Prop
       map.addLayer({ id: "query-fill", type: "fill", source: "query-area", paint: { "fill-color": "#0d9488", "fill-opacity": 0.08 } });
       map.addLayer({ id: "query-line", type: "line", source: "query-area", paint: { "line-color": "#0f766e", "line-width": 2, "line-dasharray": [2, 2] } });
       map.addSource("records", { type: "geojson", data: emptyCollection() });
-      map.addLayer({ id: "records", type: "circle", source: "records", paint: { "circle-radius": ["match", ["get", "recordType"], "earthquake", 7, "geology", 9, "mineral_occurrence", 6, 6], "circle-color": ["match", ["get", "recordType"], "geology", "#7c3aed", "mineral_occurrence", "#d97706", "mapped_port", "#0284c7", "earthquake", "#dc2626", "#334155"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5, "circle-opacity": 0.9 } });
+      map.addLayer({ id: "records", type: "circle", source: "records", paint: { "circle-radius": ["match", ["get", "selected"], "yes", 10, ["match", ["get", "recordType"], "earthquake", 7, "geology", 9, "mineral_occurrence", 6, 6]], "circle-color": ["match", ["get", "recordType"], "geology", "#7c3aed", "mineral_occurrence", "#d97706", "mapped_port", "#0284c7", "earthquake", "#dc2626", "#334155"], "circle-stroke-color": ["match", ["get", "selected"], "yes", "#102a27", "#ffffff"], "circle-stroke-width": ["match", ["get", "selected"], "yes", 3, 1.5], "circle-opacity": 0.9 } });
       map.on("mouseenter", "records", () => { map.getCanvas().style.cursor = "pointer"; }); map.on("mouseleave", "records", () => { map.getCanvas().style.cursor = "crosshair"; });
     });
     mapRef.current = map; return () => { map.remove(); mapRef.current = null; };
@@ -33,11 +33,11 @@ export function MapView({ lat, lon, radiusKm, data, onLocation, onSelect }: Prop
     const map = mapRef.current; if (!map) return;
     const update = () => {
       (map.getSource("query-area") as GeoJSONSource | undefined)?.setData(circle(lon, lat, radiusKm));
-      const features = data?.geojson.features.map((feature) => ({ ...feature, properties: { canonicalId: feature.id, recordType: feature.properties.recordType, name: String(feature.properties.properties.name ?? feature.id) } })) ?? [];
+      const features = data?.geojson.features.map((feature) => ({ ...feature, properties: { canonicalId: feature.id, recordType: feature.properties.recordType, name: String(feature.properties.properties.name ?? feature.id), selected: feature.id === selectedId ? "yes" : "no" } })) ?? [];
       (map.getSource("records") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features } as FeatureCollection);
     };
     if (map.loaded()) update(); else map.once("load", update);
-  }, [lat, lon, radiusKm, data]);
+  }, [lat, lon, radiusKm, data, selectedId]);
   return <div className="map" ref={container} aria-label="Interactive results map. Click to choose a coordinate." />;
 }
 

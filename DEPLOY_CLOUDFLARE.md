@@ -10,6 +10,7 @@ npm run typecheck
 npm test
 npm run build
 npm run test:live
+npm run test:live:analytics
 ```
 
 The live test should show records from at least three sources. An Overpass public-instance outage is acceptable only when its status is explicitly `unavailable`; it must not remove other results.
@@ -54,6 +55,7 @@ No secret is required. The supported variables already in `wrangler.jsonc` are:
 | `CACHE_TTL_SECONDS` | `900` | fresh combined-query cache lifetime |
 | `STALE_TTL_SECONDS` | `86400` | maximum explicit stale fallback lifetime |
 | `OVERPASS_ENDPOINT` | official `overpass-api.de` interpreter | operator-selectable Overpass instance |
+| `GEOCODER_ENDPOINT` | official public Nominatim search endpoint | operator-selectable geocoder; public endpoint is rate-limited and cached |
 
 If adding optional narrative synthesis in a future release, set its key only as a Worker secret (`npx wrangler secret put ANTHROPIC_API_KEY`). This version does not call Anthropic and does not need the secret.
 
@@ -67,18 +69,22 @@ curl -fsS "$BASE/api/v1/health"
 curl -fsS "$BASE/api/v1/sources"
 curl -fsS "$BASE/api/v1/openapi.json"
 curl -fsS "$BASE/api/v1/context?lat=34.0522&lon=-118.2437&radius_km=100&limit=100"
+curl -fsS "$BASE/api/v1/analysis?lat=34.0522&lon=-118.2437&radius_km=100&limit=100"
+curl -fsS "$BASE/api/v1/compare?lat_a=34.0522&lon_a=-118.2437&lat_b=34.742&lon_b=-120.5724&radius_km=100&limit=100"
+curl -fsS "$BASE/api/v1/places?q=Vandenberg%20Space%20Force%20Base"
 ```
 
 Then open `$BASE` in a browser and verify:
 
-1. map click changes latitude/longitude;
-2. source toggles and radius produce a reproducible query URL;
-3. multiple source colors appear when data exists;
-4. a table row opens source URL, timestamps, raw fields, attribution, and limitations;
-5. GeoJSON download contains only real returned features;
-6. `/mcp` connects from an MCP client and `list_sources` plus `build_location_context` run successfully;
-7. a deliberately invalid radius (`251`) returns HTTP 400;
-8. a provider outage remains visible without erasing other provider results.
+1. a Los Angeles preset produces computed findings, distributions, clusters, map features, and supporting records;
+2. clicking a chart slice filters both the map and supporting-record list;
+3. explicit place search returns attributed results and does not request while typing;
+4. Vandenberg/Santa Barbara and Tokyo Bay presets produce shareable URLs;
+5. comparison uses equivalent parameters and includes source availability/cap states;
+6. a record opens source URL, timestamps, raw fields, attribution, and limitations;
+7. `/mcp` connects and `list_sources`, `build_location_context`, `analyze_region`, and `compare_regions` run successfully;
+8. a deliberately invalid radius (`251`) returns HTTP 400;
+9. a provider outage remains visible without erasing other provider results.
 
 ## 5. Connect GitHub Builds
 

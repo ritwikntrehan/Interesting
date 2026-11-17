@@ -21,7 +21,8 @@
   "vars": {
     "CACHE_TTL_SECONDS": "900",
     "STALE_TTL_SECONDS": "86400",
-    "OVERPASS_ENDPOINT": "https://overpass-api.de/api/interpreter"
+    "OVERPASS_ENDPOINT": "https://overpass-api.de/api/interpreter",
+    "GEOCODER_ENDPOINT": "https://nominatim.openstreetmap.org/search"
   },
   "observability": {"enabled": true}
 }

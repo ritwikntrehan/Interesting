@@ -3,8 +3,8 @@
 ## Request flow
 
 ```text
-React/MapLibre UI ─┬─ GET /api/v1/context ─┐
-MCP client ────────┴─ POST /mcp ───────────┤
+React/MapLibre UI ─┬─ GET /api/v1/analysis|compare ─┐
+MCP client ────────┴─ POST /mcp ────────────────────┤
                                            ▼
                               FederationOrchestrator
                                │  D1 query cache
@@ -14,6 +14,9 @@ MCP client ────────┴─ POST /mcp ─────────�
                   └────────────┴────────────┴─────────────┘
                                            ▼
                          canonical records + source statuses
+                                           │
+                                           ▼
+                     deterministic analytics + evidence links
 ```
 
 The REST and MCP surfaces instantiate the same `FederationOrchestrator`. Each adapter owns request construction, timeout, bounded result handling, normalization, metadata, attribution, and source-specific limitations. Calls use `Promise.all`, so a failed provider becomes an explicit source status without suppressing other records.
@@ -32,6 +35,14 @@ Each record contains:
 
 The response envelope adds the sanitized query, per-source status, aggregate counts, source-catalog version, cross-source caveats, and a deterministic provenance flag.
 
+## Analytics contract
+
+`packages/analytics` consumes only a canonical `ContextEnvelope`; it never calls an upstream directly. It computes commodity and geology distributions, per-source distance quantiles and radial bins, deterministic DBSCAN-style mineral-occurrence proximity clusters, seismic/infrastructure summaries, and classified `computed_observation` findings. Every finding and interactive slice carries canonical supporting record IDs.
+
+The comparison contract embeds both regional analyses and adds composition percentage-point differences, shared/unique geological age labels, cluster and median-distance metrics, and a four-source availability table. Counts and shares always say that they describe returned samples. A partial source is surfaced as capped rather than silently extrapolated into an abundance claim.
+
+Place search is a separate bounded service: an explicit query goes through `/api/v1/places`, checks the 30-day D1/in-memory cache, enforces a one-uncached-request-per-second guard for the public Nominatim endpoint, and adds required attribution. The UI does not issue requests while typing.
+
 ## Provider behavior
 
 | Adapter | Spatial query | Bound | Cache policy | Special handling |
@@ -45,7 +56,7 @@ The current combined D1 cache defaults to 15 minutes fresh and 24 hours stale. I
 
 ## Cloudflare topology
 
-One module Worker serves API/MCP routes and a single-page application from Workers Static Assets. D1 stores JSON query envelopes. Cloudflare Workers Observability is enabled; `/api/v1/metrics` exposes only process-local counters and clearly labels their isolate scope. No Durable Object, queue, R2 bucket, authentication subsystem, or model API is required.
+One module Worker serves API/MCP routes and a single-page application from Workers Static Assets. D1 stores JSON query envelopes and place-search cache entries. Cloudflare Workers Observability is enabled; `/api/v1/metrics` exposes only process-local counters and clearly labels their isolate scope. No Durable Object, queue, R2 bucket, authentication subsystem, or model API is required.
 
 The in-memory rate bucket is deliberately a best-effort per-isolate abuse guard, not a globally strict quota. For a high-traffic public service, add Cloudflare Rate Limiting rules or a Durable Object without weakening the existing input/result bounds.
 
@@ -64,4 +75,4 @@ Provider HTTP errors, invalid JSON, and timeouts become `unavailable` statuses w
 
 ## Testing
 
-Fixture tests validate request parameters, longitude/latitude ordering, units, pagination, source caveats, transformation, antimeridian splitting, partial failures, and cache state. HTTP tests execute the Worker app directly. The MCP test connects an official SDK client to the official Web Standard Streamable HTTP server transport and calls `list_sources`. `npm run test:live` is separate because public upstream availability is not deterministic.
+Fixture tests validate request parameters, longitude/latitude ordering, units, pagination, source caveats, transformation, antimeridian splitting, partial failures, and cache state. Analytics tests validate multi-valued shares, evidence links, clusters, distances, cap disclosures, and comparison semantics. HTTP tests execute all REST surfaces directly. The MCP test connects an official SDK client to the official Web Standard Streamable HTTP server transport and validates the eight-tool catalog. `npm run test:live:analytics` verifies Los Angeles, Vandenberg/Santa Barbara, Tokyo Bay, and a cross-region comparison against real upstreams; it is separate because public upstream availability is not deterministic.
