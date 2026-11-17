@@ -7,5 +7,11 @@ const adapter = (id: "macrostrat" | "mrds", fail = false): DataAdapter => ({ id,
 describe("federation orchestration", () => {
   it("keeps independent source failures visible", async () => { const value = await new FederationOrchestrator([adapter("macrostrat"), adapter("mrds", true)]).buildContext(input); expect(value.statuses.map((s) => s.state)).toEqual(["live", "unavailable"]); expect(value.provenance.deterministic).toBe(true); });
   it("returns coherent zero counts for all catalog sources", async () => { const value = await new FederationOrchestrator([adapter("macrostrat")]).buildContext({ ...input, sources: ["macrostrat"] }); expect(value.counts.bySource).toEqual({ macrostrat: 0, mrds: 0, osm: 0, earthquakes: 0 }); });
+  it("continues live federation if cache read fails", async () => {
+    const brokenCache = { get: async () => { throw new Error("no such table: query_cache"); }, put: async () => {} };
+    const result = await new FederationOrchestrator([adapter("macrostrat")], brokenCache).buildContext({ ...input, sources: ["macrostrat"] });
+    expect(result.statuses[0]?.state).toBe("live");
+    expect(result.counts.total).toBe(0);
+  });
   it("memory cache expires into explicit cached state", async () => { const cache = new MemoryQueryCache(); const orchestration = new FederationOrchestrator([adapter("macrostrat")], cache, 60, 120); await orchestration.buildContext({ ...input, sources: ["macrostrat"] }); const value = await orchestration.buildContext({ ...input, sources: ["macrostrat"] }); expect(value.statuses[0]?.state).toBe("cached"); expect(value.statuses[0]?.cacheAgeSeconds).toBeDefined(); });
 });
