@@ -45,7 +45,7 @@ export function App() {
       </section>
       <aside className={`detail panel ${record ? "open" : ""}`}>{record ? <RecordDetail record={record} close={() => setSelected(null)} /> : <><div className="section-title"><span>03</span><h2>Inspect provenance</h2></div><p className="hint">Select a mapped point or table row to see unmodified upstream attributes, attribution, precision, and limitations.</p><div className="notice"><b>Interpret with care</b><p>These datasets describe different phenomena and dates. Co-location does not establish causality or risk.</p></div></>}</aside>
     </main>
-    <footer><span>Canonical contract v1.0.0</span><span>WGS84 · provider failures remain visible</span><a href="https://github.com/ritwikntrehan/world-data-federation">GitHub</a></footer>
+    <footer><span>Canonical contract v1.0.0</span><span>WGS84 · provider failures remain visible</span><a href="https://github.com/ritwikntrehan/Interesting">GitHub</a></footer>
   </div>;
 }
 

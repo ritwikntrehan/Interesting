@@ -31,7 +31,7 @@ export abstract class BaseAdapter implements DataAdapter {
   }
 
   protected async fetchJson<T>(url: string, init: RequestInit, signal: AbortSignal): Promise<T> {
-    const response = await fetch(url, { ...init, signal, headers: { "Accept": "application/json", "User-Agent": "WorldDataFederation/1.0 (+https://github.com/ritwikntrehan/world-data-federation)", ...init.headers } });
+    const response = await fetch(url, { ...init, signal, headers: { "Accept": "application/json", "User-Agent": "WorldDataFederation/1.0 (+https://github.com/ritwikntrehan/Interesting)", ...init.headers } });
     if (!response.ok) throw new ProviderError(`Upstream returned HTTP ${response.status}`, response.status);
     try { return await response.json() as T; } catch { throw new ProviderError("Upstream returned invalid JSON", response.status); }
   }

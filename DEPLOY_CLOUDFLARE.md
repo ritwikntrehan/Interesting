@@ -85,7 +85,7 @@ Then open `$BASE` in a browser and verify:
 In Cloudflare Dashboard:
 
 1. **Workers & Pages → Create application → Import a repository**.
-2. Authorize GitHub and select `world-data-federation`.
+2. Authorize GitHub and select the connected repository `ritwikntrehan/Interesting` (the application and Worker remain named `world-data-federation`).
 3. Set the production branch to `main`.
 4. Use build command `npm ci && npm run build`.
 5. Use deploy command `npm run deploy`.
